@@ -249,17 +249,19 @@
   }
 
 
+  function initGame(){
     player = {
       x: W/2, y: H/2, r: 14,
       hp: 100, maxHp: 100,
       speed: 190,
       level: 1, xp: 0, xpNeed: 12,
-      dmg: 10, atkSpeed: 1.6, // shots per second
+      dmg: 13, atkSpeed: 1.8, // shots per second
       atkCd: 0,
       range: 260,
       magnet: 90,
       multishot: 1,
       regen: 0,
+      lifesteal: 0,
       angle:0,
       legPhase:0
     };
@@ -363,14 +365,15 @@
 
   // ---------- level up ----------
   const upgradePool=[
-    {ic:'⚔',nm:'SHARPEN',ds:'+35% damage', apply:p=>p.dmg*=1.35},
-    {ic:'⚡',nm:'HASTEN',ds:'+25% attack speed', apply:p=>p.atkSpeed*=1.25},
+    {ic:'⚔',nm:'SHARPEN',ds:'+50% damage', apply:p=>p.dmg*=1.5},
+    {ic:'⚡',nm:'HASTEN',ds:'+35% attack speed', apply:p=>p.atkSpeed*=1.35},
     {ic:'👟',nm:'SPRINT',ds:'+18% move speed', apply:p=>p.speed*=1.18},
     {ic:'❤',nm:'VITALITY',ds:'+30 max HP & heal', apply:p=>{p.maxHp+=30;p.hp=Math.min(p.maxHp,p.hp+30);}},
     {ic:'🧲',nm:'MAGNETIZE',ds:'+60% pickup radius', apply:p=>p.magnet*=1.6},
     {ic:'✳',nm:'MULTISHOT',ds:'+1 projectile', apply:p=>p.multishot+=1},
-    {ic:'♻',nm:'REGEN',ds:'+1.2 hp/sec', apply:p=>p.regen+=1.2},
+    {ic:'♻',nm:'REGEN',ds:'+3 hp/sec', apply:p=>p.regen+=3},
     {ic:'📡',nm:'REACH',ds:'+25% attack range', apply:p=>p.range*=1.25},
+    {ic:'🩸',nm:'LIFESTEAL',ds:'+8% dmg dealt as HP', apply:p=>p.lifesteal+=0.08},
   ];
   function shuffle(arr){
     const a=arr.slice();
@@ -379,6 +382,9 @@
   }
   function openLevelUp(){
     paused=true;
+    // baseline growth every level, on top of whichever card is picked
+    player.dmg *= 1.08;
+    player.atkSpeed *= 1.04;
     levelUpScreen.style.display='flex';
     cardsDiv.innerHTML='';
     const picks=shuffle(upgradePool).slice(0,3);
@@ -472,6 +478,7 @@
         if(Math.hypot(p.x-e.x,p.y-e.y) < e.r+p.r){
           e.hp -= p.dmg;
           hit=true;
+          if(player.lifesteal>0) player.hp=Math.min(player.maxHp, player.hp+p.dmg*player.lifesteal);
           for(let k=0;k<4;k++) particles.push({x:e.x,y:e.y,vx:(Math.random()-0.5)*140,vy:(Math.random()-0.5)*140,life:0.35,color:e.color});
           if(e.hp<=0){
             spawnOrb(e.x,e.y,e.xp);
