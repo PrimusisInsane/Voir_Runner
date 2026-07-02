@@ -117,6 +117,38 @@
     font-size:20px;font-weight:900;letter-spacing:3px;color:var(--blood);
     z-index:25;pointer-events:none;opacity:0;text-transform:uppercase;
   }
+
+  #dashBtn{
+    position:fixed; right:26px; bottom:26px;
+    width:84px;height:84px;border-radius:50%;
+    border:3px solid var(--toxic);
+    background:rgba(124,252,106,.12);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;
+    z-index:20; pointer-events:auto;
+    color:var(--toxic); font-weight:bold; font-size:11px; letter-spacing:1px;
+    -webkit-user-select:none;
+  }
+  #dashBtn.cooling{
+    border-color:#3a3a44; color:#3a3a44; background:rgba(58,58,68,.15);
+  }
+  #dashBtn:active:not(.cooling){ background:rgba(124,252,106,.35); }
+  #dashFill{
+    position:absolute; bottom:0; left:0; width:100%; height:0%;
+    background:rgba(58,58,68,.55); border-radius:0 0 50px 50px; pointer-events:none;
+  }
+
+  #rotateScreen{
+    position:fixed;inset:0;z-index:60;
+    background:#0a0a0f;
+    display:none;
+    flex-direction:column;align-items:center;justify-content:center;
+    gap:18px; text-align:center; padding:24px;
+  }
+  #rotateScreen svg{ animation:spin 1.6s ease-in-out infinite; }
+  @keyframes spin{
+    0%{transform:rotate(0deg);} 50%{transform:rotate(-90deg);} 100%{transform:rotate(-90deg);}
+  }
 </style>
 </head>
 <body>
@@ -141,9 +173,11 @@
 
   <div id="flashMsg"></div>
 
+  <div id="dashBtn"><div id="dashFill"></div><span style="position:relative;">DASH</span></div>
+
   <div id="startScreen">
     <div class="title">VOID<br><span>RUNNER</span></div>
-    <div class="sub">DRAG ANYWHERE TO MOVE. YOUR CORE AUTO-FIRES AT THE NEAREST THREAT. SURVIVE. THE VOID GETS HUNGRIER OVER TIME.</div>
+    <div class="sub">DRAG ANYWHERE TO MOVE. YOUR CORE AUTO-FIRES AT THE NEAREST THREAT. TAP DASH TO BURST THROUGH ENEMIES WITH BRIEF INVINCIBILITY. SURVIVE. THE VOID GETS HUNGRIER OVER TIME.</div>
     <button class="btn" id="startBtn">ENTER THE VOID</button>
   </div>
 
@@ -160,6 +194,15 @@
   </div>
 </div>
 
+<div id="rotateScreen">
+  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+    <rect x="5" y="2" width="14" height="20" rx="2"></rect>
+    <line x1="12" y1="18" x2="12.01" y2="18"></line>
+  </svg>
+  <div class="title" style="font-size:20px;">ROTATE YOUR DEVICE</div>
+  <div class="sub">VOID RUNNER PLAYS IN LANDSCAPE. TURN YOUR PHONE SIDEWAYS TO CONTINUE.</div>
+</div>
+
 <script>
 (function(){
   const canvas = document.getElementById('game');
@@ -174,6 +217,23 @@
   }
   window.addEventListener('resize', resize);
   resize();
+
+  // ---------- orientation lock (landscape) ----------
+  const rotateScreen=document.getElementById('rotateScreen');
+  let wasRunningBeforeRotate=false;
+  function checkOrientation(){
+    const portrait = window.innerHeight > window.innerWidth;
+    if(portrait){
+      if(running && !paused){ wasRunningBeforeRotate=true; paused=true; }
+      rotateScreen.style.display='flex';
+    } else {
+      rotateScreen.style.display='none';
+      if(wasRunningBeforeRotate){ paused=false; wasRunningBeforeRotate=false; lastTime=0; }
+    }
+  }
+  window.addEventListener('resize', checkOrientation);
+  window.addEventListener('orientationchange', ()=>setTimeout(checkOrientation,150));
+  checkOrientation();
 
   // ---------- state ----------
   let running=false, paused=false;
@@ -255,19 +315,22 @@
       hp: 100, maxHp: 100,
       speed: 190,
       level: 1, xp: 0, xpNeed: 12,
-      dmg: 13, atkSpeed: 1.8, // shots per second
+      dmg: 20, atkSpeed: 1.8, // shots per second
       atkCd: 0,
       range: 260,
       magnet: 90,
       multishot: 1,
       regen: 0,
-      lifesteal: 0,
+      lifesteal: 0.08,
       angle:0,
-      legPhase:0
+      legPhase:0,
+      dashCd:0, dashCdMax:2.0, invuln:0
     };
     enemies=[]; orbs=[]; projectiles=[]; particles=[];
     killCount=0; threatLevel=1; elapsed=0; t=0;
     spawnTimer=0;
+    dashFill.style.height='0%';
+    dashBtn.classList.remove('cooling');
   }
 
   // ---------- input: virtual joystick (drag anywhere) ----------
@@ -330,6 +393,26 @@
     if(mouseDown){mouseDown=false; endJoy();}
   });
 
+  // ---------- dash ----------
+  const dashBtn=document.getElementById('dashBtn');
+  const dashFill=document.getElementById('dashFill');
+  function tryDash(){
+    if(!running||paused) return;
+    if(player.dashCd>0) return;
+    const mag=Math.hypot(joyVec.x,joyVec.y);
+    let dx,dy;
+    if(mag>0.12){ dx=joyVec.x; dy=joyVec.y; }
+    else { dx=Math.cos(player.angle); dy=Math.sin(player.angle); }
+    const dist=130;
+    player.x=Math.max(player.r,Math.min(W-player.r,player.x+dx*dist));
+    player.y=Math.max(player.r,Math.min(H-player.r,player.y+dy*dist));
+    player.invuln=0.3;
+    player.dashCd=player.dashCdMax;
+    for(let k=0;k<10;k++) particles.push({x:player.x,y:player.y,vx:(Math.random()-0.5)*220,vy:(Math.random()-0.5)*220,life:0.3,color:'#a78bfa'});
+  }
+  dashBtn.addEventListener('touchstart',e=>{ e.preventDefault(); tryDash(); },{passive:false});
+  dashBtn.addEventListener('mousedown',e=>{ e.preventDefault(); tryDash(); });
+
   // ---------- spawning ----------
   let spawnTimer=0;
   function spawnEnemy(){
@@ -373,7 +456,6 @@
     {ic:'✳',nm:'MULTISHOT',ds:'+1 projectile', apply:p=>p.multishot+=1},
     {ic:'♻',nm:'REGEN',ds:'+3 hp/sec', apply:p=>p.regen+=3},
     {ic:'📡',nm:'REACH',ds:'+25% attack range', apply:p=>p.range*=1.25},
-    {ic:'🩸',nm:'LIFESTEAL',ds:'+8% dmg dealt as HP', apply:p=>p.lifesteal+=0.08},
   ];
   function shuffle(arr){
     const a=arr.slice();
@@ -383,11 +465,21 @@
   function openLevelUp(){
     paused=true;
     // baseline growth every level, on top of whichever card is picked
-    player.dmg *= 1.08;
-    player.atkSpeed *= 1.04;
+    player.dmg *= 1.03;
+    player.atkSpeed *= 1.02;
     levelUpScreen.style.display='flex';
     cardsDiv.innerHTML='';
-    const picks=shuffle(upgradePool).slice(0,3);
+    const multishotCard = upgradePool.find(u=>u.nm==='MULTISHOT');
+    const rest = upgradePool.filter(u=>u.nm!=='MULTISHOT');
+    let picks;
+    if(player.multishot < 8){
+      // guarantee multishot as one of the three slots
+      picks = shuffle(rest).slice(0,2);
+      picks.push(multishotCard);
+      picks = shuffle(picks);
+    } else {
+      picks = shuffle(rest).slice(0,3);
+    }
     picks.forEach(u=>{
       const div=document.createElement('div');
       div.className='card';
@@ -420,6 +512,11 @@
 
     if(player.regen>0) player.hp=Math.min(player.maxHp, player.hp+player.regen*dt);
 
+    if(player.dashCd>0) player.dashCd=Math.max(0,player.dashCd-dt);
+    if(player.invuln>0) player.invuln=Math.max(0,player.invuln-dt);
+    dashFill.style.height=(player.dashCd/player.dashCdMax*100)+'%';
+    dashBtn.classList.toggle('cooling', player.dashCd>0);
+
     // spawn logic: interval shrinks, count grows with threat
     const spawnInterval = Math.max(0.35, 1.1 - elapsed/80);
     spawnTimer -= dt;
@@ -438,7 +535,7 @@
       e.angle = Math.atan2(dy,dx);
       e.legPhase = (e.legPhase||0) + dt*(6+e.speed*0.03);
       e.hitCd -= dt;
-      if(d < e.r+player.r && e.hitCd<=0){
+      if(d < e.r+player.r && e.hitCd<=0 && player.invuln<=0){
         player.hp -= e.dmg;
         e.hitCd = 0.6;
         flash('-'+Math.round(e.dmg),'#e6394f');
@@ -589,7 +686,7 @@
     }
 
     // player
-    drawHuman(player.x,player.y,player.angle,player.r*1.9,'#a78bfa',player.legPhase,14);
+    drawHuman(player.x,player.y,player.angle,player.r*1.9,'#a78bfa',player.legPhase, player.invuln>0?28:14);
 
     // range ring (subtle)
     ctx.beginPath();
