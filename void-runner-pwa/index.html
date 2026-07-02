@@ -163,6 +163,7 @@
     <div id="xpOuter"><div id="xpInner"></div></div>
     <div id="topRight">
       <div id="threat">THREAT 1</div>
+      <div id="lsTag" style="color:var(--toxic);font-weight:bold;">LS +0.0/s</div>
       <div id="timer">00:00</div>
     </div>
   </div>
@@ -246,6 +247,8 @@
   const xpInner=document.getElementById('xpInner');
   const lvlTag=document.getElementById('lvlTag');
   const threatEl=document.getElementById('threat');
+  const lsTag=document.getElementById('lsTag');
+  let lsAccum=0, lsDisplayTimer=1;
   const timerEl=document.getElementById('timer');
   const flashMsg=document.getElementById('flashMsg');
   const startScreen=document.getElementById('startScreen');
@@ -331,6 +334,7 @@
     spawnTimer=0;
     dashFill.style.height='0%';
     dashBtn.classList.remove('cooling');
+    lsAccum=0; lsDisplayTimer=1; lsTag.textContent='LS +0.0/s';
   }
 
   // ---------- input: virtual joystick (drag anywhere) ----------
@@ -575,7 +579,11 @@
         if(Math.hypot(p.x-e.x,p.y-e.y) < e.r+p.r){
           e.hp -= p.dmg;
           hit=true;
-          if(player.lifesteal>0) player.hp=Math.min(player.maxHp, player.hp+p.dmg*player.lifesteal);
+          if(player.lifesteal>0){
+            const healed=p.dmg*player.lifesteal;
+            player.hp=Math.min(player.maxHp, player.hp+healed);
+            lsAccum+=healed;
+          }
           for(let k=0;k<4;k++) particles.push({x:e.x,y:e.y,vx:(Math.random()-0.5)*140,vy:(Math.random()-0.5)*140,life:0.35,color:e.color});
           if(e.hp<=0){
             spawnOrb(e.x,e.y,e.xp);
@@ -614,6 +622,12 @@
       const pt=particles[i];
       pt.x+=pt.vx*dt; pt.y+=pt.vy*dt; pt.life-=dt;
       if(pt.life<=0) particles.splice(i,1);
+    }
+
+    lsDisplayTimer-=dt;
+    if(lsDisplayTimer<=0){
+      lsTag.textContent='LS +'+lsAccum.toFixed(1)+'/s';
+      lsAccum=0; lsDisplayTimer=1;
     }
 
     if(player.hp<=0) gameOver();
